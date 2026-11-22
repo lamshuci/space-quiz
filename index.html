@@ -70,7 +70,7 @@
       cursor: pointer; transition: border-color .2s, background .2s, transform .2s;
     }
     .answer:not(:disabled):hover { background: var(--option-hover); border-color: #aacb98; transform: translateY(-1px); }
-    .answer:focus-visible, .primary:focus-visible { outline: 3px solid #92be80; outline-offset: 3px; }
+    .answer:focus-visible, .primary:focus-visible, .secondary:focus-visible { outline: 3px solid #92be80; outline-offset: 3px; }
     .answer:disabled { cursor: default; opacity: 1; }
     .letter { display: grid; place-items: center; flex: 0 0 29px; height: 29px; border-radius: 7px; background: var(--track); color: var(--muted); font-size: 11px; font-weight: 800; }
     .answer.correct { border-color: #8bc77b; background: #eef8e9; color: #315b2d; animation: celebrate .45s ease; }
@@ -91,6 +91,18 @@
     .results h2 { margin-top: 18px; }
     .result-score { font-size: 46px; line-height: 1; font-weight: 800; letter-spacing: -.06em; color: #638f54; margin: 23px 0 8px; }
     .result-copy { color: var(--muted); margin: 0 auto; max-width: 310px; }
+    .secondary { width: 100%; min-height: 45px; margin-top: 11px; border: 1px solid var(--border); border-radius: 10px; background: var(--option); color: var(--text); font-weight: 700; cursor: pointer; }
+    .secondary:hover { background: var(--option-hover); }
+    .review { text-align: left; }
+    .review h2 { margin-top: 0; }
+    .review-list { display: grid; gap: 12px; margin: 20px 0 0; padding: 0; list-style: none; }
+    .review-item { padding: 17px; border: 1px solid var(--border); border-radius: 10px; }
+    .review-item h3 { margin: 0 0 9px; font-size: 15px; line-height: 1.4; }
+    .review-status { margin: 0 0 10px; font-weight: 800; }
+    .review-status.correct { color: #48743c; }
+    .review-status.incorrect { color: #a54b45; }
+    .review-item p:not(.review-status) { margin: 5px 0 0; font-size: 13px; }
+    .review-fact { color: var(--muted); }
     [hidden] { display: none !important; }
     @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 50% { transform: translateX(6px); } 75% { transform: translateX(-4px); } }
     @keyframes celebrate { 50% { transform: scale(1.015); } }
@@ -107,6 +119,8 @@
       :root { --background: #171f1d; --surface: #222c29; --text: #edf2eb; --muted: #a2b0a7; --border: #35433c; --option: #26312d; --option-hover: #303e35; --track: #36443b; --shadow: 0 16px 50px rgba(0, 0, 0, .14); }
       .pill { background: #344a37; color: #c1e0ad; }
       .score strong, .result-score { color: #b1d99e; }
+      .review-status.correct { color: #b1d99e; }
+      .review-status.incorrect { color: #f0aaa3; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
@@ -152,7 +166,13 @@
       <p class="result-copy" id="result-message"></p>
       <div class="result-score" id="result-score"></div>
       <p class="result-copy">questions answered correctly</p>
+      <button class="secondary" id="review-answers" type="button">Review your answers</button>
       <button class="primary" id="restart" type="button">Play again <span aria-hidden="true">↗</span></button>
+    </section>
+    <section class="card review" id="review" aria-labelledby="review-title" hidden>
+      <h2 id="review-title" tabindex="-1">Answer review</h2>
+      <ol class="review-list" id="review-list"></ol>
+      <button class="secondary" id="back-to-results" type="button">Back to results</button>
     </section>
     <footer class="footer"><span>✦</span> Made for curious minds <span>✦</span></footer>
   </main>
@@ -180,6 +200,7 @@
     let current = 0;
     let score = 0;
     let answered = false;
+    let selectedAnswers = [];
     let attemptQuestions = [];
 
     function shuffleQuestions() {
@@ -240,6 +261,7 @@
       if (answered) return;
       answered = true;
       const item = attemptQuestions[current];
+      selectedAnswers[current] = index;
       const isCorrect = index === item.correct;
       if (isCorrect) score++;
       Array.from(answers.children).forEach((button, i) => {
@@ -283,7 +305,57 @@
       }
     });
 
+    function renderAnswerReview() {
+      const reviewList = document.getElementById("review-list");
+      reviewList.replaceChildren();
+      attemptQuestions.forEach((item, index) => {
+        const selected = selectedAnswers[index];
+        const isCorrect = selected === item.correct;
+        const entry = document.createElement("li");
+        entry.className = "review-item";
+
+        const heading = document.createElement("h3");
+        heading.textContent = `${index + 1}. ${item.question}`;
+        const status = document.createElement("p");
+        status.className = `review-status ${isCorrect ? "correct" : "incorrect"}`;
+        status.textContent = isCorrect ? "✓ Correct" : "× Incorrect";
+
+        const yourAnswer = document.createElement("p");
+        const yourAnswerLabel = document.createElement("strong");
+        yourAnswerLabel.textContent = "Your answer: ";
+        yourAnswer.append(yourAnswerLabel, document.createTextNode(item.answers[selected]));
+
+        const correctAnswer = document.createElement("p");
+        const correctAnswerLabel = document.createElement("strong");
+        correctAnswerLabel.textContent = "Correct answer: ";
+        correctAnswer.append(correctAnswerLabel, document.createTextNode(item.answers[item.correct]));
+
+        const fact = document.createElement("p");
+        fact.className = "review-fact";
+        fact.textContent = item.fact;
+        entry.append(heading, status, yourAnswer, correctAnswer, fact);
+        reviewList.append(entry);
+      });
+    }
+
+    document.getElementById("review-answers").addEventListener("click", () => {
+      renderAnswerReview();
+      results.hidden = true;
+      document.getElementById("review").hidden = false;
+      document.getElementById("review-title").focus();
+    });
+
+    document.getElementById("back-to-results").addEventListener("click", () => {
+      document.getElementById("review").hidden = true;
+      results.hidden = false;
+      document.getElementById("review-answers").focus();
+    });
+
     document.getElementById("restart").addEventListener("click", () => {
+      current = 0;
+      score = 0;
+      selectedAnswers = [];
+      document.getElementById("review").hidden = true;
       results.hidden = true;
       quiz.hidden = false;
       startAttempt();
